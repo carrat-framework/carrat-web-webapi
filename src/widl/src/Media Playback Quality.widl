@@ -1,0 +1,13 @@
+partial interface HTMLVideoElement {
+          VideoPlaybackQuality getVideoPlaybackQuality();
+        };
+
+[Exposed=Window]
+        interface VideoPlaybackQuality {
+          readonly attribute DOMHighResTimeStamp creationTime;
+          readonly attribute unsigned long droppedVideoFrames;
+          readonly attribute unsigned long totalVideoFrames;
+
+          // Deprecated!
+          readonly attribute unsigned long corruptedVideoFrames;
+        };

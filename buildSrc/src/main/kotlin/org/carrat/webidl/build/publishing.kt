@@ -8,6 +8,7 @@ fun Project.version(baseVersion : String) {
             throw InvalidUserDataException("Release version doesn't match base version")
         }
         version = releaseVersion
+    } else {
+        version = "$baseVersion-SNAPSHOT"
     }
-    version = "$baseVersion-SNAPSHOT"
 }

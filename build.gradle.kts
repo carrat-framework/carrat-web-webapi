@@ -24,7 +24,6 @@ plugins {
     id("fetchWebIdl")
     id("compileWebIdl")
     kotlin("multiplatform")
-//    id("com.jfrog.bintray") version "1.8.5"
 }
 
 group = "org.carrat"
@@ -104,8 +103,6 @@ tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
 
-
-
 publishing {
     publications {
         forEach {
@@ -122,18 +119,18 @@ publishing {
         }
     }
     repositories {
-//        maven {
-//            val releasesRepoUrl = "https://api.bintray.com/maven/carrat/carrat/${project.name}/;publish=1"
-//            val snapshotsRepoUrl = "https://api.bintray.com/maven/carrat/carrat-snapshots/${project.name}/;publish=1;override=1"
-//            val isSnapshot = version.toString().endsWith("SNAPSHOT")
-//            name = if(isSnapshot) "carratSnapshot" else "carrat"
-//            url = uri(if (isSnapshot) snapshotsRepoUrl else releasesRepoUrl)
-//            credentials(PasswordCredentials::class)
-//        }
-//        maven {
-//            name = "github"
-//            url = uri("https://maven.pkg.github.com/carrat/carrat-webapi")
-//            credentials(PasswordCredentials::class)
-//        }
+        val isSnapshot = version.toString().endsWith("SNAPSHOT")
+        if(!isSnapshot) {
+            maven {
+                name = "carrat"
+                url = uri("https://api.bintray.com/maven/carrat/carrat/${project.name}/;publish=1")
+                credentials(PasswordCredentials::class)
+            }
+        }
+        maven {
+            name = "github"
+            url = uri("https://maven.pkg.github.com/carrat-framework/carrat-webapi")
+            credentials(PasswordCredentials::class)
+        }
     }
 }

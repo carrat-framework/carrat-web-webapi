@@ -6,4 +6,7 @@ data class Callback(
     override val identifier: Identifier,
     val type : Type,
     val arguments : List<Argument>
-) : Declaration()
+) : Declaration() {
+    override val members: Collection<Member>
+        get() = emptySet()
+}

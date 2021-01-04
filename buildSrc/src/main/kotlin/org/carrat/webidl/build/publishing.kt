@@ -1,3 +1,5 @@
+package org.carrat.webidl.build
+
 import org.gradle.api.InvalidUserDataException
 import org.gradle.api.Project
 

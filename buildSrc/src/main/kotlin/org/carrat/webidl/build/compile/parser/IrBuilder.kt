@@ -13,6 +13,9 @@ class IrBuilder {
     fun enterDeclaration(name : String, type : CitizenType, inherits : String? = null){
         val identifier = Identifier(name)
         declaration = declarations.computeIfAbsent(identifier) { DeclarationIrBuilder(identifier, type, inherits) }
+        if(declaration!!.inherits == null && inherits != null) {
+            declaration!!.inherits = inherits
+        }
     }
 
     fun exitDeclaration(){

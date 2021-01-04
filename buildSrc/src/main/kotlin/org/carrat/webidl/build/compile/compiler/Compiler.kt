@@ -7,6 +7,7 @@ import org.carrat.webidl.build.compile.model.webidlir.*
 import org.carrat.webidl.build.compile.model.webidlir.Enum
 import org.carrat.webidl.build.compile.model.webidlir.Iterable
 import org.carrat.webidl.build.compile.model.webidlir.types.*
+import org.carrat.webidl.build.compile.model.webidlir.values.*
 import java.nio.file.Path
 
 class Compiler(
@@ -47,13 +48,13 @@ class Compiler(
                                 dynamicSupported = false,
                                 allowDefaultValue = false
                             ),
-                            returnType = getTypeName(declaration.type, declarationsMap, false)
+                            returnType = getTypeName(declaration.type, declarationsMap, false, false, false)
                         )
                     )
                     saveCommon(builder.build())
                 }
                 is Typedef -> {
-                    val type = getTypeName(declaration.type, declarationsMap, false)
+                    val type = getTypeName(declaration.type, declarationsMap, false, false, false)
                     if (type != Dynamic) {
                         val builder = TypeAliasSpec.builder(declaration.identifier.name, type)
                         builder.modifiers += KModifier.PUBLIC
@@ -61,9 +62,9 @@ class Compiler(
                     }
                 }
                 is CallbackInterface -> {
-                    commonInterface(declaration, declarationsMap)
-                    jsInterface(declaration, declarationsMap)
-                    otherInterface(declaration, declarationsMap)
+                    commonInterface(declaration, declarationsMap, false)
+                    jsInterface(declaration, declarationsMap, false)
+                    otherInterface(declaration, declarationsMap, false)
                 }
                 is Enum -> {
                     val fileSpec = FileSpec.builder(packageName, declaration.identifier.name)
@@ -98,6 +99,7 @@ class Compiler(
         builder.modifiers += KModifier.OPEN
         addMembers(
             builder,
+            declaration,
             declaration.members,
             abstract = false,
             actual = false,
@@ -119,6 +121,7 @@ class Compiler(
         builder.modifiers += KModifier.ACTUAL
         addMembers(
             builder,
+            declaration,
             declaration.members,
             abstract = false,
             actual = true,
@@ -139,6 +142,7 @@ class Compiler(
         builder.modifiers += KModifier.ACTUAL
         addMembers(
             builder,
+            declaration,
             declaration.members,
             abstract = false,
             actual = true,
@@ -161,7 +165,9 @@ class Compiler(
             builder.superinterfaces[ClassName(packageName, inherits.name)] = null
         }
         addMembers(
-            builder, declaration.members,
+            builder,
+            declaration,
+            declaration.members,
             abstract = false,
             actual = false,
             dynamicSupported = false,
@@ -184,7 +190,10 @@ class Compiler(
             builder.superinterfaces[ClassName(packageName, inherits.name)] = null
         }
         addMembers(
-            builder, declaration.members, false,
+            builder,
+            declaration,
+            declaration.members,
+            false,
             actual = true,
             dynamicSupported = true,
             external = false,
@@ -205,7 +214,10 @@ class Compiler(
             builder.superinterfaces[ClassName(packageName, inherits.name)] = null
         }
         addMembers(
-            builder, declaration.members, false,
+            builder,
+            declaration,
+            declaration.members,
+            false,
             actual = true,
             dynamicSupported = false,
             external = false,
@@ -232,7 +244,9 @@ class Compiler(
             builder.superclass(ClassName(packageName, inherits.name))
         }
         addMembers(
-            builder, declaration.members,
+            builder,
+            declaration,
+            declaration.members,
             abstract = true,
             actual = false,
             dynamicSupported = false,
@@ -261,7 +275,9 @@ class Compiler(
             builder.superclass(ClassName(packageName, inherits.name))
         }
         addMembers(
-            builder, declaration.members,
+            builder,
+            declaration,
+            declaration.members,
             abstract = true,
             actual = true,
             dynamicSupported = true,
@@ -289,7 +305,9 @@ class Compiler(
             builder.superclass(ClassName(packageName, inherits.name))
         }
         addMembers(
-            builder, declaration.members,
+            builder,
+            declaration,
+            declaration.members,
             abstract = true,
             actual = true,
             dynamicSupported = false,
@@ -355,6 +373,7 @@ class Compiler(
 
     private fun addMembers(
         builder: TypeSpec.Builder,
+        declaration: Declaration,
         members: List<Member>,
         abstract: Boolean,
         actual: Boolean,
@@ -362,6 +381,7 @@ class Compiler(
         external: Boolean,
         declarations: Map<String, Declaration>
     ) {
+        val supertypes = getAllSupertypes(declaration, declarations)
         val memberDeclarations: MutableSet<MemberDeclaration> = linkedSetOf()
         for (member in members) {
             when (member) {
@@ -394,38 +414,58 @@ class Compiler(
                     if (!external) {
                         constructorBuilder.addCode("jsOnly()")
                     }
-                    constructorBuilder.addParameters(getParameters(member.arguments, declarations, dynamicSupported))
+                    constructorBuilder.addParameters(
+                        getParameters(
+                            member.arguments,
+                            declarations,
+                            dynamicSupported,
+                            !actual
+                        )
+                    )
                 }
                 is Operation -> {
                     val operationName = member.name
-                    if (operationName is OperationName.Reference) {
-                        val memberDeclaration = MethodDeclaration(
-                            operationName.identifier.name,
-                            LambdaType(
-                                getKParameters(member.arguments, declarations),
-                                getKType(member.type, declarations)
-                            ),
-                            actual,
-                            abstract,
-                            external
-                        )
-                        memberDeclarations.add(memberDeclaration.unifyConflicts(memberDeclarations))
+                    if (!supertypes.any { it.members.contains(member) }) {
+                        if (operationName is OperationName.Reference) {
+                            val memberDeclaration = MethodDeclaration(
+                                operationName.identifier.name,
+                                LambdaType(
+                                    getKParameters(member.arguments, declarations, !actual),
+                                    getKType(member.type, declarations, false)
+                                ),
+                                actual,
+                                abstract,
+                                external
+                            )
+                            memberDeclarations.add(memberDeclaration.unifyConflicts(memberDeclarations))
+                        } else {
+                            System.err.println("Encountered operation with name $operationName")
+                        }
                     } else {
-                        System.err.println("Encountered operation with name $operationName")
+                        System.err.println("Skipped inherited $operationName")
                     }
                 }
                 is Attribute -> {
-                    val memberDeclaration = PropertyDeclaration(
-                        (member.name as AttributeName.Reference).identifier.name,
-                        getKType(member.type, declarations),
-                        member.inherited,
-                        !member.readOnly,
-                        actual,
-                        abstract,
-                        external
-                    )
-                    if (!memberDeclarations.add(memberDeclaration)) {
-                        System.err.println("Duplicated member $memberDeclaration")
+                    val name = member.name
+                    if (!supertypes.any { it.members.any { it is Attribute && it.name == name }}) {
+                        if (name is AttributeName.Reference) {
+                            val memberDeclaration = PropertyDeclaration(
+                                name.identifier.name,
+                                getKType(member.type, declarations, false),
+                                member.inherited,
+                                !member.readOnly,
+                                actual,
+                                abstract,
+                                external
+                            )
+                            if (!memberDeclarations.add(memberDeclaration.unifyConflicts(memberDeclarations))) {
+                                System.err.println("Duplicated member $memberDeclaration")
+                            }
+                        } else {
+                            System.err.println("Encountered attribute with name $name")
+                        }
+                    } else {
+                        System.err.println("Skipped inherited $name")
                     }
                 }
             }
@@ -447,8 +487,8 @@ class Compiler(
                                 val memberDeclaration = MethodDeclaration(
                                     operationName.identifier.name,
                                     LambdaType(
-                                        getKParameters(actualMember.arguments, declarations),
-                                        getKType(actualMember.type, declarations)
+                                        getKParameters(actualMember.arguments, declarations, !actual),
+                                        getKType(actualMember.type, declarations, false)
                                     ),
                                     actual,
                                     false,
@@ -462,17 +502,31 @@ class Compiler(
                         is Attribute -> {
                             val memberDeclaration = PropertyDeclaration(
                                 (actualMember.name as AttributeName.Reference).identifier.name,
-                                getKType(actualMember.type, declarations),
+                                getKType(actualMember.type, declarations, false),
                                 actualMember.inherited,
                                 !actualMember.readOnly,
                                 actual,
                                 false,
                                 external
                             )
-                            if (!coMemberDeclarations.add(memberDeclaration)) {
+                            if (!coMemberDeclarations.add(memberDeclaration.unifyConflicts(coMemberDeclarations))) {
                                 System.err.println("Duplicated member $memberDeclaration")
                             }
                         }
+                    }
+                }
+                is Constant -> {
+                    val memberDeclaration = PropertyDeclaration(
+                        member.identifier.name,
+                        getKType(member.type, declarations, false),
+                        false,
+                        true,
+                        actual,
+                        false,
+                        external
+                    )
+                    if (!coMemberDeclarations.add(memberDeclaration)) {
+                        System.err.println("Duplicated member $memberDeclaration")
                     }
                 }
             }
@@ -480,6 +534,32 @@ class Compiler(
         coMemberDeclarations.forEach { it.addTo(companionObjectBuilder, dynamicSupported, true) }
         if (coMemberDeclarations.isNotEmpty()) {
             builder.addType(companionObjectBuilder.build())
+            val annotationBuilder = AnnotationSpec.builder(ClassName("kotlin", "Suppress"))
+            annotationBuilder.addMember("\"NESTED_CLASS_IN_EXTERNAL_INTERFACE\"")
+            builder.addAnnotation(annotationBuilder.build())
+        }
+    }
+
+    private fun getAllSupertypes(
+        declaration: Declaration,
+        declarations: Map<String, Declaration>
+    ): Collection<Declaration> {
+        if (declaration is Typedef) {
+            val type = declaration.type
+            if (type is TypeReference) {
+                return getAllSupertypes(declarations.get(type.identifier.name)!!, declarations)
+            } else {
+                return emptySet()
+            }
+        } else {
+            val supertypes =
+                declaration.members.filterIsInstance<Includes>().map { declarations[it.right.name]!! }.toMutableSet()
+            val inherits = declaration.inherits
+            if (inherits != null) {
+                supertypes.add(declarations[inherits.name]!!)
+            }
+            val inheritedSupertypes = supertypes.flatMap { getAllSupertypes(it, declarations) }
+            return supertypes + inheritedSupertypes
         }
     }
 
@@ -496,7 +576,7 @@ class Compiler(
             System.err.println("Encountered argument with name " + it.argumentName)
             "unknown"
         }
-        var type = getTypeName(it.type, declarations, dynamicSupported)
+        var type = getTypeName(it.type, declarations, dynamicSupported, false, false)
         if (it.optional && it.default == null && type != Dynamic) {
             type = type.copy(true)
         }
@@ -505,9 +585,64 @@ class Compiler(
             parameterBuilder.addModifiers(KModifier.VARARG)
         }
         if (it.default != null && allowDefaultValue) {
-            parameterBuilder.defaultValue("definedExternally")
+//            parameterBuilder.defaultValue("definedExternally")
+            parameterBuilder.defaultValue(renderValue(it.default, getKType(it.type, declarations, false)))
         }
         parameterBuilder.build()
+    }
+
+    private fun renderValue(value: Value): String {
+        return when (value) {
+            is BooleanValue -> if (value.value) "true" else "false"
+            is EmptyArrayValue -> "emptyArray()"
+            is EmptyObjectValue -> "emptyObject()"
+            is FloatValue -> "${value.value}f"
+            is IntegerValue -> value.value.toString()
+            is NullValue -> "null"
+            is StringValue -> "\"${escapeString(value.value)}\""
+            else -> throw NotImplementedError("Don't know how to render value $value")
+        }
+    }
+
+    @OptIn(ExperimentalUnsignedTypes::class)
+    private fun renderValue(value: Value, type: KType): String {
+        return when (value) {
+            is BooleanValue -> if (value.value) "true" else "false"
+            is EmptyArrayValue -> "emptyArray<${renderType(type, false)}>()"
+            is EmptyObjectValue -> "emptyObject()"
+            is FloatValue -> when (type) {
+                NamedType("kotlin", "Double") -> {
+                    "%#f".format(value.value)
+                }
+                NamedType("kotlin", "Float") -> {
+                    "%#ff".format(value.value)
+                }
+                else -> throw NotImplementedError("Don't know how to convert value $value to $type")
+            }
+            is IntegerValue -> when (type) {
+                NamedType("kotlin", "Byte") -> value.value.toByte().toString()
+                NamedType("kotlin", "Short") -> value.value.toShort().toString()
+                NamedType("kotlin", "Int") -> value.value.toInt().toString()
+                NamedType("kotlin", "Long") -> value.value.toString() + "L"
+                NamedType("kotlin", "UByte") -> value.value.toUByte().toString() + "u"
+                NamedType("kotlin", "UShort") -> value.value.toUShort().toString() + "u"
+                NamedType("kotlin", "UInt") -> value.value.toUInt().toString() + "u"
+                NamedType("kotlin", "ULong") -> value.value.toULong().toString() + "UL"
+                else -> throw NotImplementedError("Don't know how to convert value $value to $type")
+            }
+            is NullValue -> "null"
+            is StringValue -> "\"${escapeString(value.value)}\""
+            else -> throw NotImplementedError("Don't know how to render value $value")
+        }
+    }
+
+    private fun renderType(type: KType, dynamicSupported: Boolean): String {
+        return type.getPoetTypeName(dynamicSupported).toString()
+    }
+
+    private fun escapeString(value: String): String {
+        //TODO
+        return value
     }
 
     private fun getKParameters(
@@ -516,17 +651,16 @@ class Compiler(
         allowDefaultValue: Boolean = true
     ) = arguments.map {
         val argumentName = it.argumentName
-        val name = if (argumentName is ArgumentName.Reference) {
-            argumentName.identifier.name
-        } else {
-            System.err.println("Encountered argument with name " + it.argumentName)
-            null
+        val name = when (argumentName) {
+            is ArgumentName.Reference -> argumentName.identifier.name
+            is ArgumentName.Keyword -> argumentName.keyword.keyword
         }
-        var type = getKType(it.type, declarations)
+        var type = getKType(it.type, declarations, false)
         if (it.optional && it.default == null && type is NamedType) {
             type = KNullableType(type)
         }
-        val defaultValue = if (it.default != null && allowDefaultValue) DefinedExternally else null
+        val defaultValue =
+            if (it.default != null && allowDefaultValue) CodeBlockKValue(renderValue(it.default, type)) else null
         Parameter(name, type, it.vararg, defaultValue)
     }
 
@@ -534,7 +668,8 @@ class Compiler(
         type: Type,
         declarations: Map<String, Declaration>,
         dynamicSupported: Boolean,
-        nullable: Boolean = false
+        nullable: Boolean,
+        allowUnsigned: Boolean
     ): TypeName {
         if (isEffectivelyDynamic(type, declarations)) {
             return if (dynamicSupported) {
@@ -548,10 +683,12 @@ class Compiler(
                 getTypeName(
                     type.memberType,
                     declarations,
-                    dynamicSupported
+                    dynamicSupported,
+                    false,
+                    allowUnsigned
                 )
             ).copy(nullable)
-            is NullableType -> getTypeName(type.baseType, declarations, dynamicSupported, true)
+            is NullableType -> getTypeName(type.baseType, declarations, dynamicSupported, true, false)
             is StringType -> ClassName("kotlin", "String").copy(nullable)
             is TypeReference -> ClassName(packageName, type.identifier.name).copy(nullable)
             is BooleanType -> ClassName("kotlin", "Boolean").copy(nullable)
@@ -561,12 +698,21 @@ class Compiler(
                 FloatBaseType.DOUBLE -> ClassName("kotlin", "Double").copy(nullable)
             }
             is IntegerType -> when (type.baseType) {
-//                IntegerBaseType.SHORT -> (if(type.unsigned) ClassName("kotlin","UShort") else ClassName("kotlin","Short")).copy(nullable)
-//                IntegerBaseType.LONG -> (if(type.unsigned) ClassName("kotlin","UInt") else ClassName("kotlin","Int")).copy(nullable)
-//                IntegerBaseType.LONG_LONG -> (if(type.unsigned) ClassName("kotlin","ULong") else ClassName("kotlin","Long")).copy(nullable)
-                IntegerBaseType.SHORT -> ClassName("kotlin", "Short").copy(nullable)
-                IntegerBaseType.LONG -> ClassName("kotlin", "Int").copy(nullable)
-                IntegerBaseType.LONG_LONG -> ClassName("kotlin", "Long").copy(nullable)
+                IntegerBaseType.SHORT -> (if (type.unsigned && allowUnsigned) ClassName(
+                    "kotlin",
+                    "UShort"
+                ) else ClassName("kotlin", "Short")).copy(nullable)
+                IntegerBaseType.LONG -> (if (type.unsigned && allowUnsigned) ClassName("kotlin", "UInt") else ClassName(
+                    "kotlin",
+                    "Int"
+                )).copy(nullable)
+                IntegerBaseType.LONG_LONG -> (if (type.unsigned && allowUnsigned) ClassName(
+                    "kotlin",
+                    "ULong"
+                ) else ClassName("kotlin", "Long")).copy(nullable)
+//                IntegerBaseType.SHORT -> ClassName("kotlin", "Short").copy(nullable)
+//                IntegerBaseType.LONG -> ClassName("kotlin", "Int").copy(nullable)
+//                IntegerBaseType.LONG_LONG -> ClassName("kotlin", "Long").copy(nullable)
             }
             is VoidType -> ClassName("kotlin", "Unit")
 
@@ -574,14 +720,14 @@ class Compiler(
         }
     }
 
-    private fun getKType(type: Type, declarations: Map<String, Declaration>): KType {
+    private fun getKType(type: Type, declarations: Map<String, Declaration>, allowUnsigned: Boolean): KType {
         if (isEffectivelyDynamic(type, declarations)) {
             return KDynamic
         }
         return when (type) {
-            is PromiseType -> NamedType(packageName, "Promise", getKType(type.memberType, declarations))
+            is PromiseType -> NamedType(packageName, "Promise", getKType(type.memberType, declarations, false))
             is NullableType -> {
-                val kType = getKType(type.baseType, declarations)
+                val kType = getKType(type.baseType, declarations, allowUnsigned)
                 if (kType is NamedType && !isEffectivelyNullable(type.baseType, declarations)) {
                     KNullableType(kType)
                 } else {
@@ -597,12 +743,21 @@ class Compiler(
                 FloatBaseType.DOUBLE -> NamedType("kotlin", "Double")
             }
             is IntegerType -> when (type.baseType) {
-//                IntegerBaseType.SHORT -> (if(type.unsigned) NamedType("kotlin","UShort") else NamedType("kotlin","Short"))
-//                IntegerBaseType.LONG -> (if(type.unsigned) NamedType("kotlin","UInt") else NamedType("kotlin","Int"))
-//                IntegerBaseType.LONG_LONG -> (if(type.unsigned) NamedType("kotlin","ULong") else NamedType("kotlin","Long"))
-                IntegerBaseType.SHORT -> NamedType("kotlin", "Short")
-                IntegerBaseType.LONG -> NamedType("kotlin", "Int")
-                IntegerBaseType.LONG_LONG -> NamedType("kotlin", "Long")
+                IntegerBaseType.SHORT -> (if (type.unsigned && allowUnsigned) NamedType(
+                    "kotlin",
+                    "UShort"
+                ) else NamedType("kotlin", "Short"))
+                IntegerBaseType.LONG -> (if (type.unsigned && allowUnsigned) NamedType("kotlin", "UInt") else NamedType(
+                    "kotlin",
+                    "Int"
+                ))
+                IntegerBaseType.LONG_LONG -> (if (type.unsigned && allowUnsigned) NamedType(
+                    "kotlin",
+                    "ULong"
+                ) else NamedType("kotlin", "Long"))
+//                IntegerBaseType.SHORT -> NamedType("kotlin", "Short")
+//                IntegerBaseType.LONG -> NamedType("kotlin", "Int")
+//                IntegerBaseType.LONG_LONG -> NamedType("kotlin", "Long")
             }
             is VoidType -> NamedType("kotlin", "Unit")
 

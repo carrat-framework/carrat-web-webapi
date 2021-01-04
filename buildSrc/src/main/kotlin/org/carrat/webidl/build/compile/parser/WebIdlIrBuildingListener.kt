@@ -112,9 +112,8 @@ class WebIdlIrBuildingListener(
         val ictx = ctx.integerType()
         val baseType = when {
             ictx.text == "short" -> IntegerBaseType.SHORT
-            ictx.children.size == 1 -> IntegerBaseType.LONG
-            ictx.children.size == 2 -> IntegerBaseType.LONG_LONG
-            else -> throw IllegalArgumentException("Don't know how to interpret \"${ictx.text}\" as integer type.")
+            ictx.optionalLong().text == "long" -> IntegerBaseType.LONG_LONG
+            else -> IntegerBaseType.LONG
         }
         return IntegerType(unsigned, baseType)
     }
@@ -155,6 +154,26 @@ class WebIdlIrBuildingListener(
         }
     }
 
+    private fun getConstValue(ctx: WebIdlParser.ConstValueContext, type: Type): Value {
+        val value = getConstValue(ctx)
+        return when(type) {
+            is FloatType -> when(value) {
+                is FloatValue -> value
+                is IntegerValue -> FloatValue(value.value.toDouble())
+                else -> throw IllegalArgumentException("Don't know how convert \"${value}\" to Float type.")
+            }
+            is IntegerType -> when(value) {
+                is IntegerValue -> value
+                else -> throw IllegalArgumentException("Don't know how convert \"${value}\" to Integer type.")
+            }
+            is BooleanType -> when(value) {
+                is BooleanValue -> value
+                else -> throw IllegalArgumentException("Don't know how convert \"${value}\" to Boolean type.")
+            }
+            else -> throw IllegalArgumentException("Don't know how convert \"${value}\" to ${type}.")
+        }
+    }
+
     private fun getBooleanValue(ctx: WebIdlParser.BooleanLiteralContext): BooleanValue {
         return BooleanValue(ctx.text == "true")
     }
@@ -182,6 +201,16 @@ class WebIdlIrBuildingListener(
             else -> throw IllegalArgumentException("Don't know how to interpret \"${ctx.text}\" as read only member.")
         }
         irBuilder.addMember(member)
+    }
+
+    override fun exitReadWriteAttribute(ctx: WebIdlParser.ReadWriteAttributeContext) {
+        irBuilder.addMember(getAttribute(ctx.attributeRest(), false, false))
+    }
+
+    override fun exitMixinMember(ctx: WebIdlParser.MixinMemberContext) {
+        if(ctx.attributeRest() != null) {
+            irBuilder.addMember(getAttribute(ctx.attributeRest(), false, false))
+        }
     }
 
     private fun getMapLike(ctx: WebIdlParser.MaplikeRestContext, readOnly: Boolean): MapLike {
@@ -226,7 +255,7 @@ class WebIdlIrBuildingListener(
     private fun getType(ctx: WebIdlParser.TypeContext): Type {
         return when {
             ctx.singleType() != null -> getSingleType(ctx.singleType())
-            ctx.unionType() != null -> getNullableType(ctx.widlNull() != null, getUnionType(ctx.unionType()))
+            ctx.unionType() != null -> getNullableType(ctx.widlNull().text.isNotEmpty(), getUnionType(ctx.unionType()))
             else -> throw IllegalArgumentException("Don't know how to interpret \"${ctx.text}\" as type.")
         }
     }
@@ -256,13 +285,13 @@ class WebIdlIrBuildingListener(
     private fun getUnionMemberType(ctx: WebIdlParser.UnionMemberTypeContext): Type {
         return when {
             ctx.distinguishableType() != null -> getDistinguishableType(ctx.distinguishableType())
-            ctx.unionType() != null -> getNullableType(ctx.widlNull() != null, getUnionType(ctx.unionType()))
+            ctx.unionType() != null -> getNullableType(ctx.widlNull().text.isNotEmpty(), getUnionType(ctx.unionType()))
             else -> throw IllegalArgumentException("Don't know how to interpret \"${ctx.text}\" as union type member.")
         }
     }
 
     private fun getDistinguishableType(ctx: WebIdlParser.DistinguishableTypeContext): Type {
-        val nullable = ctx.widlNull() != null
+        val nullable = ctx.widlNull().text.isNotEmpty()
         val type = when {
             ctx.primitiveType() != null -> getPrimitiveType(ctx.primitiveType())
             ctx.stringType() != null -> getStringType(ctx.stringType())
@@ -403,13 +432,16 @@ class WebIdlIrBuildingListener(
 
     private fun getArgument(ctx: WebIdlParser.ArgumentRestContext): Argument {
         return when {
-            ctx.typeWithExtendedAttributes() != null -> Argument(
-                true,
-                getType(ctx.typeWithExtendedAttributes().type()),
-                false,
-                getArgumentName(ctx.argumentName()),
-                getDefaultValue(ctx.widlDefault())
-            )
+            ctx.typeWithExtendedAttributes() != null -> {
+                val type = getType(ctx.typeWithExtendedAttributes().type())
+                Argument(
+                    true,
+                    type,
+                    false,
+                    getArgumentName(ctx.argumentName()),
+                    getDefaultValue(ctx.widlDefault(), type)
+                )
+            }
             else -> Argument(
                 false,
                 getType(ctx.type()),
@@ -428,9 +460,30 @@ class WebIdlIrBuildingListener(
         }
     }
 
+    private fun getDefaultValue(ctx: WebIdlParser.WidlDefaultContext, type: Type): Value? {
+        return if (ctx.defaultValue() != null) {
+            getDefaultValue(ctx.defaultValue(), type)
+        } else {
+            null
+        }
+    }
+
     private fun getDefaultValue(ctx: WebIdlParser.DefaultValueContext): Value {
         return when {
             ctx.constValue() != null -> getConstValue(ctx.constValue())
+            ctx.STRING() != null -> getStringValue(ctx.STRING())
+            else -> when (ctx.start.text) {
+                "[" -> EmptyArrayValue
+                "{" -> EmptyObjectValue
+                "null" -> NullValue
+                else -> throw IllegalArgumentException("Don't know how to interpret \"${ctx.text}\" as default value.")
+            }
+        }
+    }
+
+    private fun getDefaultValue(ctx: WebIdlParser.DefaultValueContext, type: Type): Value {
+        return when {
+            ctx.constValue() != null -> getConstValue(ctx.constValue(), type)
             ctx.STRING() != null -> getStringValue(ctx.STRING())
             else -> when (ctx.start.text) {
                 "[" -> EmptyArrayValue
@@ -612,7 +665,7 @@ class WebIdlIrBuildingListener(
         }
     }
 
-    fun getCallback(ctx: WebIdlParser.CallbackRestContext): Callback {
+    private fun getCallback(ctx: WebIdlParser.CallbackRestContext): Callback {
         return Callback(Identifier(ctx.IDENTIFIER().text), getType(ctx.type()), getArgumentList(ctx.argumentList()))
     }
 

@@ -47,8 +47,8 @@
   title: CSS Multi-column Layout
 - url: https://drafts.csswg.org/cssom/
   title: CSS Object Model
-#- url: https://drafts.csswg.org/cssom-view/
-#  title: CSSOM View
+- url: https://drafts.csswg.org/cssom-view/
+  title: CSSOM View
 - url: https://www.w3.org/TR/css-overflow-3/
   title: CSS Overflow
 - url: https://www.w3.org/TR/css-overscroll-1/
@@ -151,8 +151,8 @@
   title: Resource Timing
 - url: https://www.w3.org/TR/screen-orientation/
   title: Screen Orientation
-- url: https://www.w3.org/TR/secure-contexts/
-  title: Secure Contexts
+#- url: https://www.w3.org/TR/secure-contexts/
+#  title: Secure Contexts
 - url: https://www.w3.org/TR/selection-api/
   title: Selection
 - url: https://w3c.github.io/ServiceWorker/

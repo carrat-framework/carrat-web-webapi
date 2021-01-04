@@ -12,7 +12,7 @@ data class MethodDeclaration(
     val abstract: Boolean,
     val external: Boolean
 ) : MemberDeclaration() {
-    override fun addTo(builder: TypeSpec.Builder, dynamicSupported : Boolean, isObject : Boolean) {
+    override fun addTo(builder: TypeSpec.Builder, dynamicSupported: Boolean, isObject: Boolean) {
         val mBuilder = FunSpec.builder(name)
         mBuilder.returns(type.returnType.getPoetTypeName(dynamicSupported))
         if (actual) {
@@ -21,18 +21,19 @@ data class MethodDeclaration(
         if (abstract) {
             mBuilder.addModifiers(KModifier.ABSTRACT)
         } else {
-            if(!isObject) {
+            if (!isObject) {
                 mBuilder.addModifiers(KModifier.OPEN)
             }
         }
 
-        if(actual && !external && !abstract) {
+        if (actual && !external && !abstract) {
             mBuilder.addCode("jsOnly()")
         }
         mBuilder.addParameters(getPoetParameters(type.parameters, dynamicSupported))
+        builder.addFunction(mBuilder.build())
     }
 
-    private fun getPoetParameters(arguments: List<Parameter>, dynamicSupported : Boolean) = arguments.map {
+    private fun getPoetParameters(arguments: List<Parameter>, dynamicSupported: Boolean) = arguments.map {
         val builder = ParameterSpec.builder(it.name ?: "", it.type.getPoetTypeName(dynamicSupported))
         if (it.defaultValue != null) {
             builder.defaultValue(it.defaultValue.toPoetCodeBlock())
@@ -40,24 +41,26 @@ data class MethodDeclaration(
         builder.build()
     }
 
-    fun unifyConflicts(others: MutableCollection<MemberDeclaration>) : MethodDeclaration {
-        val conflicts = others.filter { other ->
-            other is MethodDeclaration &&
+    fun unifyConflicts(others: MutableCollection<MemberDeclaration>): MethodDeclaration {
+        val conflicts = others.filterIsInstance<MethodDeclaration>().filter { other ->
+                    other.name == name &&
                     other.type.parameters.size == type.parameters.size &&
                     other.type.parameters.zip(type.parameters).all { (a, b) -> conflicts(a, b) }
         }
-        if(conflicts.isEmpty()) {
+        if (conflicts.isEmpty()) {
             return this
         } else {
             others.removeAll(conflicts)
-            val newParameters : MutableList<Parameter> = mutableListOf()
-            for(i in type.parameters.indices) {
-                val b = type.parameters[i]
-                if(conflicts.any { conflicts((it as MethodDeclaration).type.parameters[i], b) }) {
-                    newParameters.add(Parameter(b.name, KDynamic, b.vararg, null))
-                } else {
-                    newParameters.add(b)
+            val newParameters: MutableList<Parameter> = mutableListOf()
+            for (i in type.parameters.indices) {
+                var b = type.parameters[i]
+                for(conflict in conflicts) {
+                    val a = conflict.type.parameters[i]
+                    if(conflicts(a, b)){
+                        b = getUpper(a, b)
+                    }
                 }
+                newParameters.add(b)
             }
             return MethodDeclaration(name, LambdaType(newParameters, type.returnType), actual, abstract, external)
         }
@@ -65,9 +68,19 @@ data class MethodDeclaration(
 
     private fun conflicts(a: Parameter, b: Parameter): Boolean = conflicts(a.type, b.type) && a.vararg == b.vararg
 
-    private fun conflicts(a: KType, b: KType): Boolean {
-        return (a == KDynamic || b == KDynamic)
+    private fun getUpper(a: Parameter, b: Parameter): Parameter {
+        return Parameter(b.name, getUpper(a.type, b.type), a.vararg || b.vararg, null)
     }
 
+    private fun conflicts(a: KType, b: KType): Boolean {
+        return (a == KDynamic || b == KDynamic) || a == b
+    }
 
+    private fun getUpper(a: KType, b: KType): KType {
+        return when {
+            (a == KDynamic || b == KDynamic) -> KDynamic
+            a == b -> a
+            else -> KDynamic
+        }
+    }
 }

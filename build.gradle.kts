@@ -1,4 +1,5 @@
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
+import org.carrat.webidl.build.version
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 buildscript {
@@ -7,16 +8,16 @@ buildscript {
         maven("https://kotlin.bintray.com/kotlinx")
     }
 
-    val kotlinVersion by extra("1.4.20")
+    val kotlinVersion by extra("1.4.21")
 
     dependencies {
         classpath(kotlin("gradle-plugin", version = kotlinVersion))
     }
 }
 
-val kotlinVersion by extra("1.4.20")
-val kotlinWrappersVersion by extra("pre.126-kotlin-1.4.10")
-val kotlinxSerializationVersion by extra("1.0.0")
+val kotlinVersion by extra("1.4.21")
+val kotlinWrappersVersion by extra("pre.134-kotlin-1.4.21")
+val kotlinxSerializationVersion by extra("1.0.1")
 
 plugins {
     id("io.spring.dependency-management") version "1.0.9.RELEASE"
@@ -49,6 +50,7 @@ configure<org.carrat.webidl.build.compile.gradle.CompileWebIdlExtension> {
     getJsOutput().set(buildDir.resolve("src/generatedSrc/widl/jsMain").absolutePath)
     getOtherOutputs().set(mapOf("jvmMain" to buildDir.resolve("src/generatedSrc/widl/jvmMain").absolutePath))
     getPackage().set("org.carrat.webapi")
+    getIgnoreDeclarations().add("HTMLFormControlsCollection")
 }
 
 kotlin {
@@ -93,9 +95,9 @@ configure<DependencyManagementExtension> {
         dependency("org.jetbrains.kotlinx:kotlinx-serialization-core:$kotlinxSerializationVersion")
         dependency("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
         dependency("org.jetbrains.kotlin:kotlin-stdlib-common:$kotlinVersion")
-        dependency("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.4.1")
-        dependency("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.1")
-        dependency("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:1.4.1")
+        dependency("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.4.2")
+        dependency("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
+        dependency("org.jetbrains.kotlinx:kotlinx-coroutines-core-js:1.4.2")
     }
 }
 
@@ -127,10 +129,10 @@ publishing {
                 credentials(PasswordCredentials::class)
             }
         }
-        maven {
-            name = "github"
-            url = uri("https://maven.pkg.github.com/carrat-framework/carrat-webapi")
-            credentials(PasswordCredentials::class)
-        }
+//        maven {
+//            name = "github"
+//            url = uri("https://maven.pkg.github.com/carrat-framework/carrat-core")
+//            credentials(PasswordCredentials::class)
+//        }
     }
 }

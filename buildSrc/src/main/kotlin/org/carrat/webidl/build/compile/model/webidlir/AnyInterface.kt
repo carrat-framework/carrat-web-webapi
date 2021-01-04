@@ -1,6 +1,6 @@
 package org.carrat.webidl.build.compile.model.webidlir
 
 abstract class AnyInterface : Declaration() {
-    open val inherits : Identifier? = null
-    abstract val members : List<Member>
+    override val inherits : Identifier? = null
+    abstract override val members : List<Member>
 }

@@ -2,8 +2,8 @@ import org.carrat.webidl.build.fetchgrammar.gradle.FetchWebIdlGrammarExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.4.20"
-    kotlin("plugin.serialization") version "1.4.20"
+    kotlin("jvm") version "1.4.21"
+    kotlin("plugin.serialization") version "1.4.21"
     id("java-gradle-plugin")
     antlr
     id("fetchWebIdlGrammar")
@@ -45,7 +45,7 @@ dependencies {
     implementation("com.sun.xsom:xsom:20140925")
 
     implementation(kotlin("serialization"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.0")
     implementation("com.charleskorn.kaml:kaml:0.26.0")
 
@@ -53,7 +53,7 @@ dependencies {
 
     implementation("org.jsoup:jsoup:1.13.1")
     implementation(gradleApi())
-    implementation(kotlin("gradle-plugin", version = "1.4.20"))
+    implementation(kotlin("gradle-plugin", version = "1.4.21"))
 
     antlr("org.antlr:antlr4:4.5")
 

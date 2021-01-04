@@ -28,7 +28,7 @@ plugins {
 }
 
 group = "org.carrat"
-version("Alpha.1")
+version("alpha.1")
 
 repositories {
     mavenCentral()

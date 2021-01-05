@@ -129,10 +129,10 @@ publishing {
                 credentials(PasswordCredentials::class)
             }
         }
-//        maven {
-//            name = "github"
-//            url = uri("https://maven.pkg.github.com/carrat-framework/carrat-core")
-//            credentials(PasswordCredentials::class)
-//        }
+        maven {
+            name = "github"
+            url = uri("https://maven.pkg.github.com/carrat-framework/carrat")
+            credentials(PasswordCredentials::class)
+        }
     }
 }

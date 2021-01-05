@@ -586,7 +586,7 @@ class Compiler(
         }
         if (it.default != null && allowDefaultValue) {
 //            parameterBuilder.defaultValue("definedExternally")
-            parameterBuilder.defaultValue(renderValue(it.default, getKType(it.type, declarations, false)))
+            parameterBuilder.defaultValue(renderValue(it.default, getKType(it.type, declarations, false), declarations))
         }
         parameterBuilder.build()
     }
@@ -605,12 +605,13 @@ class Compiler(
     }
 
     @OptIn(ExperimentalUnsignedTypes::class)
-    private fun renderValue(value: Value, type: KType): String {
+    private fun renderValue(value: Value, type: KType, declarations: Map<String, Declaration>): String {
+        val eType = resolveAliases(type, declarations)
         return when (value) {
             is BooleanValue -> if (value.value) "true" else "false"
             is EmptyArrayValue -> "emptyArray<${renderType(type, false)}>()"
             is EmptyObjectValue -> "emptyObject()"
-            is FloatValue -> when (type) {
+            is FloatValue -> when (eType) {
                 NamedType("kotlin", "Double") -> {
                     "%#f".format(value.value)
                 }
@@ -619,7 +620,7 @@ class Compiler(
                 }
                 else -> throw NotImplementedError("Don't know how to convert value $value to $type")
             }
-            is IntegerValue -> when (type) {
+            is IntegerValue -> when (eType) {
                 NamedType("kotlin", "Byte") -> value.value.toByte().toString()
                 NamedType("kotlin", "Short") -> value.value.toShort().toString()
                 NamedType("kotlin", "Int") -> value.value.toInt().toString()
@@ -634,6 +635,18 @@ class Compiler(
             is StringValue -> "\"${escapeString(value.value)}\""
             else -> throw NotImplementedError("Don't know how to render value $value")
         }
+    }
+
+    private fun resolveAliases(type: KType, declarations: Map<String, Declaration>) : KType {
+        if(type is NamedType && type.packageName == packageName) {
+            val name = type.name
+            val declaration = declarations[name]
+            if(declaration is Typedef) {
+                val aType = declaration.type
+                return resolveAliases(getKType(aType, declarations, false), declarations)
+            }
+        }
+        return type
     }
 
     private fun renderType(type: KType, dynamicSupported: Boolean): String {
@@ -660,7 +673,7 @@ class Compiler(
             type = KNullableType(type)
         }
         val defaultValue =
-            if (it.default != null && allowDefaultValue) CodeBlockKValue(renderValue(it.default, type)) else null
+            if (it.default != null && allowDefaultValue) CodeBlockKValue(renderValue(it.default, type, declarations)) else null
         Parameter(name, type, it.vararg, defaultValue)
     }
 

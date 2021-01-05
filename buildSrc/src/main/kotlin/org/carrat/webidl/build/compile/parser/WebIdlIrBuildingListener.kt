@@ -170,7 +170,8 @@ class WebIdlIrBuildingListener(
                 is BooleanValue -> value
                 else -> throw IllegalArgumentException("Don't know how convert \"${value}\" to Boolean type.")
             }
-            else -> throw IllegalArgumentException("Don't know how convert \"${value}\" to ${type}.")
+//            else -> throw IllegalArgumentException("Don't know how convert \"${value}\" to ${type}.")
+            else -> value
         }
     }
 
@@ -208,8 +209,13 @@ class WebIdlIrBuildingListener(
     }
 
     override fun exitMixinMember(ctx: WebIdlParser.MixinMemberContext) {
-        if(ctx.attributeRest() != null) {
-            irBuilder.addMember(getAttribute(ctx.attributeRest(), false, false))
+        when {
+            ctx.attributeRest() != null -> {
+                irBuilder.addMember(getAttribute(ctx.attributeRest(), !ctx.optionalReadOnly().isEmpty, false))
+            }
+            ctx.regularOperation() != null -> {
+                irBuilder.addMember(getRegularOperation(ctx.regularOperation()))
+            }
         }
     }
 

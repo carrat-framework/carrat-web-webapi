@@ -131,7 +131,7 @@ publishing {
         }
         maven {
             name = "github"
-            url = uri("https://maven.pkg.github.com/carrat-framework/carrat")
+            url = uri("https://maven.pkg.github.com/carrat-framework/carrat-webapi")
             credentials(PasswordCredentials::class)
         }
     }

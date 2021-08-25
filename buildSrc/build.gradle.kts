@@ -12,7 +12,7 @@ plugins {
 repositories {
     jcenter()
     mavenCentral()
-    maven("https://carrat.jfrog.io/artifactory/carrat-dev/")
+    maven("https://tomaszrocks.jfrog.io/artifactory/carrat-dev/")
 }
 
 gradlePlugin {

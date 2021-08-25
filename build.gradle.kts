@@ -117,7 +117,7 @@ publishing {
     repositories {
         maven {
             name = "carrat"
-            url = uri("https://carrat.jfrog.io/artifactory/carrat-dev/")
+            url = uri("https://tomaszrocks.jfrog.io/artifactory/carrat-dev/")
             credentials(PasswordCredentials::class)
         }
     }
